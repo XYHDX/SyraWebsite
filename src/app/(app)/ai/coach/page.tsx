@@ -10,7 +10,6 @@ import { Bot, Send, User } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { useChat } from 'ai/react';
 import { ScrollArea } from "@/components/ui/scroll-area";
-// Firebase will be imported lazily inside effects to avoid SSR/prerender usage
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,40 +25,79 @@ export default function AiCoachPage() {
     const router = useRouter();
 
     useEffect(() => {
-        let unsubscribe: undefined | (() => void);
         let isMounted = true;
 
         const init = async () => {
-            const firebase = await import('@/lib/firebase');
-            const { onAuthStateChanged } = await import('firebase/auth');
-            const { doc, getDoc } = await import('firebase/firestore');
+            try {
+                const { auth } = await import('@/lib/firebase');
+                const { onAuthStateChanged } = await import('firebase/auth');
 
-            if (!isMounted) return;
-            unsubscribe = onAuthStateChanged(firebase.auth, async (currentUser) => {
-                if (currentUser) {
-                    const userDocRef = doc(firebase.db, 'users', currentUser.uid);
-                    const userDocSnap = await getDoc(userDocRef);
-                    if (userDocSnap.exists()) {
-                        const profile = userDocSnap.data() as UserProfile;
-                        setUserProfile(profile);
-                        if (profile.role !== 'Admin' && profile.role !== 'Coach') {
+                if (!isMounted) return;
+                
+                const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+                    if (currentUser) {
+                        try {
+                            // Get user token for API call
+                            const token = await currentUser.getIdToken();
+                            
+                            // Fetch user from Prisma via API
+                            const response = await fetch('/api/users/me', {
+                                headers: {
+                                    'Authorization': `Bearer ${currentUser.uid}`,
+                                }
+                            });
+
+                            if (response.ok) {
+                                const profile = await response.json();
+                                setUserProfile(profile);
+                                if (profile.role !== 'Admin' && profile.role !== 'Coach') {
+                                    router.push('/dashboard');
+                                }
+                            } else if (response.status === 404) {
+                                // User doesn't exist in Prisma, create them
+                                const createResponse = await fetch('/api/users', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                        firebaseUid: currentUser.uid,
+                                        name: currentUser.displayName || 'Coach',
+                                        email: currentUser.email,
+                                        role: 'Coach', // Default role for AI coach access
+                                    })
+                                });
+
+                                if (createResponse.ok) {
+                                    const newProfile = await createResponse.json();
+                                    setUserProfile(newProfile);
+                                } else {
+                                    router.push('/dashboard');
+                                }
+                            } else {
+                                router.push('/dashboard');
+                            }
+                        } catch (error) {
+                            console.error('Error fetching user:', error);
                             router.push('/dashboard');
                         }
                     } else {
-                        router.push('/dashboard');
+                        router.push('/login');
                     }
-                } else {
-                    router.push('/login');
-                }
+                    setLoading(false);
+                });
+
+                return () => {
+                    isMounted = false;
+                    unsubscribe();
+                };
+            } catch (error) {
+                console.error('Error initializing auth:', error);
                 setLoading(false);
-            });
+            }
         };
 
         void init();
-        return () => {
-            isMounted = false;
-            if (unsubscribe) unsubscribe();
-        };
     }, [router]);
     
     const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
