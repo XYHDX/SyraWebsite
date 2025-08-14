@@ -56,6 +56,23 @@ export async function POST(req: NextRequest) {
     return response;
   } catch (error) {
     console.error('Registration error:', error);
+    
+    // Check if it's a database connection error
+    if (error instanceof Error && error.message.includes('connect')) {
+      return NextResponse.json(
+        { error: 'Database connection failed. Please try again later.' },
+        { status: 503 }
+      );
+    }
+    
+    // Check if it's a Prisma error
+    if (error instanceof Error && error.message.includes('Prisma')) {
+      return NextResponse.json(
+        { error: 'Database error. Please try again later.' },
+        { status: 503 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
