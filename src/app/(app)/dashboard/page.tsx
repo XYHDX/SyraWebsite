@@ -2,424 +2,302 @@
 
 "use client";
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trophy, Users, School as SchoolIcon, ArrowRight, Bot, Activity, Edit, Save, Upload, Loader2, User as UserIcon } from "lucide-react";
-import Link from "next/link";
-import { getCompetitions, getPosts, getUserById, getSchools, getSchoolByName, updateSchool } from "@/lib/firestore";
-import { auth, db, storage } from "@/lib/firebase";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import React, { useEffect, useState, useRef, useCallback } from "react";
-import { onAuthStateChanged, User, updateProfile } from "firebase/auth";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { 
+  Trophy, 
+  Users, 
+  Calendar, 
+  Target, 
+  TrendingUp, 
+  Award,
+  Edit,
+  Settings,
+  Bell
+} from "lucide-react";
+import Link from "next/link";
 
-
-interface UserProfile {
+interface User {
+  id: string;
   name: string;
   email: string;
-  phone: string;
   role: string;
-  school: string;
-  schoolId?: string;
-  avatarUrl?: string;
+  avatar?: string;
 }
 
-interface School {
-    id: string;
-    name: string;
+interface DashboardStats {
+  competitions: number;
+  teams: number;
+  achievements: number;
+  upcomingEvents: number;
 }
 
-interface Competition {
-  id: string;
-  name: string;
-  date: string;
-  status: string;
-  registered: boolean;
-}
-
-interface Post {
-  id: string;
-  author: string;
-  avatar: string;
-  content: string;
-  status: string;
-}
-
-function DashboardPage() {
-  const [user, setUser] = useState<User | null>(auth.currentUser);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [selectedSchool, setSelectedSchool] = useState('');
-  const [schools, setSchools] = useState<School[]>([]);
-
-  const [upcomingCompetitions, setUpcomingCompetitions] = useState<Competition[]>([]);
-  const [myRegisteredCompetitions, setMyRegisteredCompetitions] = useState<Competition[]>([]);
-  const [myPosts, setMyPosts] = useState<Post[]>([]);
-
+export default function DashboardPage() {
+  const [user, setUser] = useState<User | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const fetchUserData = useCallback(async (currentUser: User) => {
-    const docRef = doc(db, "users", currentUser.uid);
-    const docSnap = await getDoc(docRef);
-    let userProfile;
-    if (docSnap.exists()) {
-      userProfile = docSnap.data() as UserProfile;
-    } else {
-      userProfile = {
-        name: currentUser.displayName || "New User",
-        email: currentUser.email || "",
-        phone: "",
-        role: "Student",
-        school: "Not Set"
-      };
-      await setDoc(docRef, userProfile);
-    }
-    const schoolData = await getSchoolByName(userProfile.school);
-    userProfile.schoolId = schoolData?.id;
-
-    setProfile(userProfile);
-    setName(userProfile.name);
-    setPhone(userProfile.phone);
-    setSelectedSchool(userProfile.school);
-    return userProfile;
-  }, []);
+  const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        setLoading(true);
-
-        const profilePromise = fetchUserData(currentUser);
-        const competitionsPromise = getCompetitions(undefined, true); 
-        const postsPromise = getPosts("All", 3, currentUser.uid);
-        const schoolsPromise = getSchools();
-
-        const [profile, competitions, posts, schoolsData] = await Promise.all([
-          profilePromise,
-          competitionsPromise,
-          postsPromise,
-          schoolsPromise,
-        ]);
-
-        setUpcomingCompetitions(competitions);
-        setMyRegisteredCompetitions(competitions.filter(c => c.registered));
-        setMyPosts(posts as Post[]);
-        setSchools(schoolsData as School[]);
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (!response.ok) {
+          router.push('/login');
+          return;
+        }
         
-      } else {
-        setUser(null);
-        setProfile(null);
+        const data = await response.json();
+        const userData = data.user;
+        setUser(userData);
+        
+        // For now, use mock stats since we haven't migrated everything to Prisma yet
+        const mockStats: DashboardStats = {
+          competitions: 3,
+          teams: userData.role === 'Coach' ? 5 : 2,
+          achievements: userData.role === 'Coach' ? 12 : 8,
+          upcomingEvents: 2
+        };
+        
+        setStats(mockStats);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        router.push('/login');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
-  }, [fetchUserData]);
+    checkAuth();
+  }, [router]);
 
-  const handleSaveChanges = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !profile) return;
-    setIsSaving(true);
-    try {
-        const userDocRef = doc(db, "users", user.uid);
-        const updatedProfileData = { name, school: selectedSchool, phone: phone || "" };
-        
-        await updateDoc(userDocRef, updatedProfileData);
-      
-        if (user.displayName !== name) {
-            await updateProfile(user, { displayName: name });
-        }
-
-        if (profile.role === 'Coach') {
-            const coachDocRef = doc(db, "coaches", user.uid);
-            await updateDoc(coachDocRef, { name, school: selectedSchool });
-        }
-
-        const schoolData = await getSchoolByName(selectedSchool);
-
-        setProfile(prev => prev ? { ...prev, ...updatedProfileData, schoolId: schoolData?.id } : null);
-      
-        toast({
-            title: "Success!",
-            description: "Your profile has been updated.",
-        });
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to update profile. Please try again.",
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handlePictureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0 || !user) {
-        return;
-    }
-    const file = e.target.files[0];
-    if (file.size > 1024 * 1024) { // 1MB limit
-        toast({ variant: "destructive", title: "File too large", description: "Please upload an image smaller than 1MB." });
-        return;
-    }
-
-    setIsUploading(true);
-    try {
-        const storageRef = ref(storage, `profile-pictures/${user.uid}`);
-        await uploadBytes(storageRef, file);
-        const avatarUrl = await getDownloadURL(storageRef);
-
-        const userDocRef = doc(db, "users", user.uid);
-        await updateDoc(userDocRef, { avatarUrl });
-        
-        await updateProfile(user, { photoURL: avatarUrl });
-
-        if (profile?.role === 'Coach') {
-            const coachDocRef = doc(db, 'coaches', user.uid);
-            await updateDoc(coachDocRef, { avatar: avatarUrl });
-        }
-        
-        setProfile(prev => prev ? { ...prev, avatarUrl } : null);
-
-        toast({ title: "Success!", description: "Profile picture updated." });
-    } catch (error) {
-        console.error("Error uploading picture:", error);
-        toast({ variant: "destructive", title: "Upload Failed", description: "Could not update your profile picture." });
-    } finally {
-        setIsUploading(false);
-    }
-  };
-
-  if (loading || !profile) {
+  if (loading) {
     return (
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
-             <div className="mb-8">
-                <Skeleton className="h-9 w-64" />
-                <Skeleton className="h-5 w-80 mt-2" />
-            </div>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                <Card><CardContent className="p-6"><Skeleton className="h-24 w-full"/></CardContent></Card>
-                <Card><CardContent className="p-6"><Skeleton className="h-24 w-full"/></CardContent></Card>
-                <Card className="md:col-span-2 lg:col-span-3"><CardContent className="p-6"><Skeleton className="h-24 w-full"/></CardContent></Card>
-                <Card className="md:col-span-2 lg:col-span-2"><CardContent className="p-6"><Skeleton className="h-32 w-full"/></CardContent></Card>
-                 <Card className="md:col-span-2 lg:col-span-1"><CardContent className="p-6"><Skeleton className="h-32 w-full"/></CardContent></Card>
-            </div>
-        </main>
-    )
+      <div className="flex-1 p-4 md:p-6 lg:p-8">
+        <div className="mb-8">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-5 w-80 mt-2" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <Skeleton className="h-6 w-24" />
+                <Skeleton className="h-8 w-16" />
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          {[1, 2].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <Skeleton className="h-7 w-32" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-20 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
   }
-  
-  const isAdmin = profile.role === 'Admin';
-  const isStudent = profile.role === 'Student';
-  const isCoach = profile.role === 'Coach';
 
+  if (!user || !stats) {
+    return null;
+  }
 
   return (
-    <main className="flex-1 p-4 md:p-6 lg:p-8">
+    <div className="flex-1 p-4 md:p-6 lg:p-8">
+      {/* Welcome Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold font-headline tracking-tight">Welcome, {profile.name || 'User'}!</h1>
-        <p className="text-muted-foreground">
-          {isAdmin 
-            ? "Manage the platform from your admin dashboard."
-            : "Here's a snapshot of what's happening in the academy. Manage your profile below."
-          }
-        </p>
-      </div>
-
-        <div className="grid gap-8 lg:grid-cols-3">
-        
-          <div className="lg:col-span-2 space-y-8">
-             <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><UserIcon /> Account Details</CardTitle>
-                    <CardDescription>Update your personal information here.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <form className="grid grid-cols-1 md:grid-cols-2 gap-6" onSubmit={handleSaveChanges}>
-                         <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="name">Full Name</Label>
-                                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} disabled={isSaving || isUploading} />
-                            </div>
-                             <div className="space-y-2">
-                                <Label htmlFor="phone">Phone Number</Label>
-                                <Input id="phone" type="tel" value={phone || ''} onChange={(e) => setPhone(e.target.value)} disabled={isSaving || isUploading} />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="email">Email</Label>
-                                <Input id="email" type="email" value={profile.email} readOnly disabled />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="role">Role</Label>
-                                <Input id="role" value={profile.role} readOnly disabled />
-                            </div>
-                             <div className="space-y-2">
-                                <Label htmlFor="school">School</Label>
-                                <Select value={selectedSchool} onValueChange={setSelectedSchool} disabled={isSaving || isUploading || isStudent || isCoach}>
-                                    <SelectTrigger id="school">
-                                        <SelectValue placeholder="Select your school" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="Not Set">Not Set</SelectItem>
-                                        {schools.map(school => (
-                                            <SelectItem key={school.id} value={school.name}>{school.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                             <div className="flex justify-end">
-                                <Button type="submit" disabled={isSaving || isUploading}>
-                                    {isSaving ? <Loader2 className="animate-spin" /> : <Save/>}
-                                    Save Changes
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col items-center justify-center gap-4">
-                            <div className="relative">
-                                <Avatar className="h-32 w-32 border-4 border-primary/20">
-                                    <AvatarImage src={profile.avatarUrl || user?.photoURL || ''} />
-                                    <AvatarFallback>{profile.name?.charAt(0) || 'U'}</AvatarFallback>
-                                </Avatar>
-                                {isUploading && (
-                                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
-                                        <Loader2 className="h-8 w-8 animate-spin text-white" />
-                                    </div>
-                                )}
-                            </div>
-                            <input type="file" ref={fileInputRef} onChange={handlePictureChange} accept="image/png, image/jpeg" style={{ display: 'none' }} />
-                            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading || isSaving}>
-                                {isUploading ? <Loader2 className="animate-spin" /> : <Upload />}
-                                Change Picture
-                            </Button>
-                        </div>
-                    </form>
-                </CardContent>
-            </Card>
-
-            <div className="grid gap-6 md:grid-cols-2">
-                 <Card className="flex flex-col">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Upcoming Competitions</CardTitle>
-                        <Trophy className="h-4 w-4 text-primary" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{upcomingCompetitions.length}</div>
-                        <p className="text-xs text-muted-foreground">challenges awaiting your skills</p>
-                    </CardContent>
-                    <CardFooter className="mt-auto">
-                        <Button variant="outline" asChild className="w-full">
-                            <Link href="/competitions">View All <ArrowRight className="ml-2 h-4 w-4" /></Link>
-                        </Button>
-                    </CardFooter>
-                </Card>
-
-                 <Card className="flex flex-col">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium">Community Activity</CardTitle>
-                        <Activity className="h-4 w-4 text-primary" />
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{myPosts.length}</div>
-                        <p className="text-xs text-muted-foreground">posts you've created</p>
-                    </CardContent>
-                    <CardFooter className="mt-auto">
-                        <Button variant="outline" asChild className="w-full">
-                            <Link href="/community">Join the Conversation <ArrowRight className="ml-2 h-4 w-4" /></Link>
-                        </Button>
-                    </CardFooter>
-                </Card>
-            </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Welcome back, {user.name}!</h1>
+            <p className="text-muted-foreground">Here's what's happening in your robotics academy</p>
           </div>
-
-          <div className="lg:col-span-1 space-y-8">
-             <Card className="bg-gradient-to-r from-primary/10 to-transparent">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Bot /> AI Assistant</CardTitle>
-                    <CardDescription>Need help drafting a post or have a question? Our AI tools are here to help.</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-2">
-                    <Button asChild>
-                        <Link href="/ai/generate-post">Try AI Post Generator</Link>
-                    </Button>
-                    <Button asChild variant="secondary">
-                        <Link href="/ai/coach">Chat with AI Coach</Link>
-                    </Button>
-                </CardContent>
-            </Card>
-
-            {myRegisteredCompetitions.length > 0 && (
-            <Card>
-                <CardHeader>
-                <CardTitle>My Registered Competitions</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                {myRegisteredCompetitions.map(comp => (
-                    <div key={comp.id} className="flex items-center justify-between p-2 rounded-md bg-secondary/50">
-                    <div>
-                        <p className="font-semibold">{comp.name}</p>
-                        <p className="text-sm text-muted-foreground">{comp.date}</p>
-                    </div>
-                    <Button asChild variant="outline" size="sm">
-                        <Link href={`/competitions/${comp.id}`}>View</Link>
-                    </Button>
-                    </div>
-                ))}
-                </CardContent>
-            </Card>
-            )}
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>My Posts</CardTitle>
-                    <CardDescription>A summary of your recent contributions.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <div className="space-y-2">
-                           <Skeleton className="h-8 w-full" />
-                           <Skeleton className="h-8 w-full" />
-                           <Skeleton className="h-8 w-4/5" />
-                        </div>
-                    ) : (
-                        myPosts.length > 0 ? (
-                            <ul className="space-y-2">
-                                {myPosts.map(post => (
-                                    <li key={post.id} className="text-sm p-2 rounded-md bg-secondary flex items-center justify-between">
-                                        <span className="truncate pr-2">{post.content}</span>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${post.status === 'Approved' ? 'bg-green-200 text-green-900 dark:bg-green-800 dark:text-green-100' : 'bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100'}`}>{post.status}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (
-                             <p className="text-sm text-muted-foreground text-center py-4">You haven't made any posts yet.</p>
-                        )
-                    )}
-                     <Button variant="link" className="p-0 h-auto mt-4 text-sm" asChild>
-                        <Link href="/community">Go to Community to post <ArrowRight className="ml-1 h-3 w-3" /></Link>
-                    </Button>
-                </CardContent>
-            </Card>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="icon">
+              <Bell className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon">
+              <Settings className="h-4 w-4" />
+            </Button>
           </div>
         </div>
-    </main>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Competitions</CardTitle>
+            <Trophy className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.competitions}</div>
+            <p className="text-xs text-muted-foreground">Active competitions</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Teams</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.teams}</div>
+            <p className="text-xs text-muted-foreground">
+              {user.role === 'Coach' ? 'Teams coached' : 'Teams joined'}
+            </p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Achievements</CardTitle>
+            <Award className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.achievements}</div>
+            <p className="text-xs text-muted-foreground">Total awards won</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Upcoming Events</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.upcomingEvents}</div>
+            <p className="text-xs text-muted-foreground">Events this month</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Quick Actions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              Quick Actions
+            </CardTitle>
+            <CardDescription>Get started with common tasks</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Link href="/competitions">
+              <Button variant="outline" className="w-full justify-start">
+                <Trophy className="mr-2 h-4 w-4" />
+                Browse Competitions
+              </Button>
+            </Link>
+            
+            {user.role === 'Coach' && (
+              <Link href="/teams">
+                <Button variant="outline" className="w-full justify-start">
+                  <Users className="mr-2 h-4 w-4" />
+                  Manage Teams
+                </Button>
+              </Link>
+            )}
+            
+            <Link href="/community">
+              <Button variant="outline" className="w-full justify-start">
+                <TrendingUp className="mr-2 h-4 w-4" />
+                Community Posts
+              </Button>
+            </Link>
+            
+            <Link href="/ai/coach">
+              <Button variant="outline" className="w-full justify-start">
+                <Award className="mr-2 h-4 w-4" />
+                AI Coach Assistant
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Profile Summary */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              Profile Summary
+            </CardTitle>
+            <CardDescription>Your current information</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4">
+              <Avatar className="h-16 w-16">
+                <AvatarImage src={user.avatar} alt={user.name} />
+                <AvatarFallback className="text-lg">{user.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <h3 className="font-semibold">{user.name}</h3>
+                <p className="text-sm text-muted-foreground">{user.email}</p>
+                <Badge variant="secondary" className="mt-1">
+                  {user.role}
+                </Badge>
+              </div>
+            </div>
+            
+            <div className="pt-2">
+              <Link href="/profile">
+                <Button className="w-full" size="sm">
+                  Edit Profile
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Activity */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Recent Activity</CardTitle>
+          <CardDescription>Your latest robotics activities and achievements</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+              <div className="h-2 w-2 bg-primary rounded-full"></div>
+              <div className="flex-1">
+                <p className="font-medium">Team registration approved</p>
+                <p className="text-sm text-muted-foreground">Your team "RoboMasters" was approved for VEX Competition</p>
+              </div>
+              <span className="text-xs text-muted-foreground">2 hours ago</span>
+            </div>
+            
+            <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+              <div className="h-2 w-2 bg-primary rounded-full"></div>
+              <div className="flex-1">
+                <p className="font-medium">New achievement unlocked</p>
+                <p className="text-sm text-muted-foreground">First Place in Arduino Innovation Challenge</p>
+              </div>
+              <span className="text-xs text-muted-foreground">1 day ago</span>
+            </div>
+            
+            <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+              <div className="h-2 w-2 bg-primary rounded-full"></div>
+              <div className="flex-1">
+                <p className="font-medium">Workshop completed</p>
+                <p className="text-sm text-muted-foreground">Python Programming for Robotics workshop</p>
+              </div>
+              <span className="text-xs text-muted-foreground">3 days ago</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
-
-
-export default DashboardPage;

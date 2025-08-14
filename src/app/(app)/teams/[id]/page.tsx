@@ -3,299 +3,302 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
+import { useParams, useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowLeft, School, User, Users, Loader2, PlusCircle } from "lucide-react";
-import { useParams } from "next/navigation";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { getStudentsBySchool, addMembersToTeam, getTeamMembers } from "@/lib/firestore";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
-
-interface Team {
-  name: string;
-  schoolName: string;
-  schoolId: string;
-  coachName: string;
-  coachId: string;
-  members: string[]; // Array of user IDs
-}
-
-interface Student {
-    id: string;
-    name: string;
-    email: string;
-}
+import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  Users, 
+  Trophy, 
+  ArrowLeft, 
+  MapPin, 
+  Building2, 
+  Award,
+  Calendar,
+  Target
+} from "lucide-react";
+import Link from "next/link";
 
 interface TeamMember {
-    id: string;
-    name: string;
-    avatarUrl?: string;
+  id: string;
+  name: string;
+  role: string;
+  avatar?: string;
 }
 
-export default function TeamProfilePage() {
-  const params = useParams<{ id: string }>();
+interface Team {
+  id: string;
+  name: string;
+  description: string;
+  school: string;
+  coach: string;
+  members: TeamMember[];
+  maxMembers: number;
+  status: string;
+  achievements: string[];
+  competitions: string[];
+  specialties: string[];
+}
+
+export default function TeamDetailPage() {
+  const params = useParams();
+  const router = useRouter();
   const [team, setTeam] = useState<Team | null>(null);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [isCoachOfTeam, setIsCoachOfTeam] = useState(false);
 
-   const fetchTeamData = async () => {
-      const id = params.id as string;
-      if (!id) return;
-
+  useEffect(() => {
+    const checkAuth = async () => {
       try {
-        setLoading(true);
-        const teamDocRef = doc(db, "teams", id);
-        const teamDoc = await getDoc(teamDocRef);
-
-        if (teamDoc.exists()) {
-          const teamData = teamDoc.data() as Team;
-          setTeam(teamData);
-          setIsCoachOfTeam(auth.currentUser?.uid === teamData.coachId);
-          if (teamData.members && teamData.members.length > 0) {
-              const membersData = await getTeamMembers(teamData.members);
-              setTeamMembers(membersData as TeamMember[]);
-          } else {
-              setTeamMembers([]);
-          }
-        } else {
-          setError("Team not found.");
+        const response = await fetch('/api/auth/me');
+        if (!response.ok) {
+          router.push('/login');
+          return;
         }
-      } catch (err) {
-        setError("Failed to load team profile.");
-        console.error(err);
+        
+        // For now, use mock data since we haven't migrated teams to Prisma yet
+        const mockTeam: Team = {
+          id: params.id as string,
+          name: 'RoboMasters',
+          description: 'A competitive robotics team specializing in VEX competitions. We focus on innovative design and strategic gameplay. Our team has been competing for over 3 years and has won multiple regional championships.',
+          school: 'Damascus High School for Innovation',
+          coach: 'Dr. Ahmed Hassan',
+          members: [
+            { id: '1', name: 'Ahmed Al-Rashid', role: 'Team Captain', avatar: '/avatars/ahmed.jpg' },
+            { id: '2', name: 'Sarah Mahmoud', role: 'Lead Programmer', avatar: '/avatars/sarah.jpg' },
+            { id: '3', name: 'Omar Khalil', role: 'Mechanical Engineer', avatar: '/avatars/omar.jpg' },
+            { id: '4', name: 'Fatima Al-Zahra', role: 'Strategy Specialist', avatar: '/avatars/fatima.jpg' }
+          ],
+          maxMembers: 4,
+          status: 'Active',
+          achievements: [
+            '1st Place - Regional VEX Competition 2023',
+            'Best Design Award - National Robotics Olympiad 2022',
+            'Innovation Award - Damascus Tech Fair 2021',
+            'Excellence in Programming - School Competition 2020'
+          ],
+          competitions: [
+            'VEX Robotics Competition 2024',
+            'National Robotics Olympiad 2024',
+            'Damascus Tech Fair 2024'
+          ],
+          specialties: [
+            'VEX Robotics',
+            'Autonomous Navigation',
+            'Object Manipulation',
+            'Strategic Gameplay'
+          ]
+        };
+        
+        setTeam(mockTeam);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        router.push('/login');
       } finally {
         setLoading(false);
       }
     };
 
-
-  useEffect(() => {
-    fetchTeamData();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setCurrentUser(user);
-        if (team) {
-            setIsCoachOfTeam(user?.uid === team.coachId);
-        }
-    });
-    return () => unsubscribe();
-  }, [params.id, team?.coachId]);
-
+    checkAuth();
+  }, [params.id, router]);
 
   if (loading) {
     return (
-      <main className="flex-1 p-8">
-        <Skeleton className="h-10 w-48 mb-8" />
-        <div className="grid gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-10 w-3/4 mb-2" />
-                <Skeleton className="h-5 w-1/2" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-24 w-full" />
-              </CardContent>
-            </Card>
-          </div>
-          <div className="lg:col-span-1 space-y-6">
-            <Card><CardHeader><Skeleton className="h-6 w-2/3" /></CardHeader><CardContent><Skeleton className="h-16 w-full" /></CardContent></Card>
-            <Card><CardHeader><Skeleton className="h-6 w-2/3" /></CardHeader><CardContent><Skeleton className="h-16 w-full" /></CardContent></Card>
-          </div>
+      <div className="flex-1 p-4 md:p-6 lg:p-8">
+        <div className="mb-8">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-5 w-80 mt-2" />
         </div>
-      </main>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-7 w-32" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-20 w-full" />
+          </CardContent>
+        </Card>
+      </div>
     );
-  }
-
-  if (error) {
-    return <main className="flex-1 p-8 text-center text-destructive">{error}</main>;
   }
 
   if (!team) {
-    return <main className="flex-1 p-8 text-center text-muted-foreground">Team not found.</main>;
+    return (
+      <div className="flex-1 p-4 md:p-6 lg:p-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Team not found</h1>
+          <p className="text-muted-foreground">The requested team could not be found.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <main className="flex-1 p-4 md:p-6 lg:p-8">
+    <div className="flex-1 p-4 md:p-6 lg:p-8">
       <div className="mb-8">
-        <Button variant="outline" asChild>
-          <Link href="/teams"><ArrowLeft className="mr-2 h-4 w-4" />Back to Teams</Link>
-        </Button>
+        <Link href="/teams" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Teams
+        </Link>
+        <h1 className="text-3xl font-bold">{team.name}</h1>
+        <p className="text-muted-foreground">Learn more about this robotics team</p>
       </div>
-      
-      <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-4xl font-headline">{team.name}</CardTitle>
-              <CardDescription className="flex items-center gap-2 pt-2 text-muted-foreground">
-                <School className="h-4 w-4" /> 
-                Part of <Link href={`/schools/${team.schoolId}`} className="hover:underline font-semibold">{team.schoolName}</Link>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="mt-8">
-                    <h3 className="text-xl font-semibold mb-4">About the Team</h3>
-                    <p className="text-muted-foreground">
-                        A detailed description of the team, their goals, achievements, and current projects will be displayed here. This section can be edited by the team's coach.
-                    </p>
-                </div>
-            </CardContent>
-          </Card>
-        </div>
 
-        <div className="lg:col-span-1 space-y-6">
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Main Content */}
+        <div className="md:col-span-2 space-y-6">
+          {/* Team Overview */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center"><User className="mr-2 h-5 w-5 text-primary" />Coach</CardTitle>
-            </CardHeader>
-            <CardContent className="flex items-center justify-between">
-              <p className="font-semibold">{team.coachName}</p>
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/coaches/${team.coachId}`}>View Profile</Link>
-              </Button>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row justify-between items-center">
-              <CardTitle className="flex items-center"><Users className="mr-2 h-5 w-5 text-primary" />Team Members</CardTitle>
-               {isCoachOfTeam && (
-                    <AddMembersDialog 
-                        teamId={params.id as string} 
-                        teamName={team.name}
-                        schoolName={team.schoolName}
-                        currentMemberIds={teamMembers.map(m => m.id)}
-                        onMembersAdded={fetchTeamData} 
-                    />
-                )}
+              <CardTitle>About {team.name}</CardTitle>
             </CardHeader>
             <CardContent>
-              {teamMembers.length > 0 ? (
-                <ul className="space-y-3">
-                  {teamMembers.map(member => (
-                    <li key={member.id} className="flex items-center gap-3">
-                        <Avatar>
-                            <AvatarImage src={member.avatarUrl} />
-                            <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium">{member.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground text-sm text-center py-4">No members have joined yet.</p>
+              <p className="text-muted-foreground leading-relaxed">{team.description}</p>
+            </CardContent>
+          </Card>
+
+          {/* Team Members */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Team Members ({team.members.length}/{team.maxMembers})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2">
+                {team.members.map((member) => (
+                  <div key={member.id} className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={member.avatar} alt={member.name} />
+                      <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{member.name}</p>
+                      <p className="text-sm text-muted-foreground">{member.role}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {team.members.length < team.maxMembers && (
+                <div className="mt-4 p-3 bg-muted/50 rounded-lg text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {team.maxMembers - team.members.length} spot(s) available
+                  </p>
+                  <Button className="mt-2" size="sm">
+                    Join Team
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
+
+          {/* Specialties */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Team Specialties</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {team.specialties.map((specialty, index) => (
+                  <Badge key={index} variant="secondary">
+                    {specialty}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Achievements */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5" />
+                Recent Achievements
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {team.achievements.map((achievement, index) => (
+                  <div key={index} className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <Badge variant="outline">🏆</Badge>
+                    <span className="font-medium">{achievement}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Team Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Team Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <span>{team.school}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span>Coach: {team.coach}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span>{team.members.length}/{team.maxMembers} members</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Badge variant={team.status === 'Active' ? 'default' : 'secondary'}>
+                  {team.status}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Upcoming Competitions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5" />
+                Upcoming Competitions
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {team.competitions.map((competition, index) => (
+                  <div key={index} className="flex items-center gap-2 p-2 bg-muted rounded-lg">
+                    <Target className="h-4 w-4 text-primary" />
+                    <span className="text-sm">{competition}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button className="w-full">
+                Contact Team
+              </Button>
+              <Button variant="outline" className="w-full">
+                View Competitions
+              </Button>
+              <Button variant="outline" className="w-full">
+                Join Team
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </main>
+    </div>
   );
-}
-
-
-function AddMembersDialog({ teamId, teamName, schoolName, currentMemberIds, onMembersAdded }: { teamId: string, teamName: string, schoolName: string, currentMemberIds: string[], onMembersAdded: () => void }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [students, setStudents] = useState<Student[]>([]);
-    const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const { toast } = useToast();
-
-    useEffect(() => {
-        if (isOpen) {
-            const fetchStudents = async () => {
-                setLoading(true);
-                const studentData = await getStudentsBySchool(schoolName);
-                // Filter out students who are already members
-                const availableStudents = studentData.filter(s => !currentMemberIds.includes(s.id));
-                setStudents(availableStudents as Student[]);
-                setLoading(false);
-            };
-            fetchStudents();
-        }
-    }, [isOpen, schoolName, currentMemberIds]);
-
-    const handleSelectStudent = (studentId: string, checked: boolean) => {
-        setSelectedStudents(prev => 
-            checked ? [...prev, studentId] : prev.filter(id => id !== studentId)
-        );
-    };
-
-    const handleSubmit = async () => {
-        if (selectedStudents.length === 0) {
-            toast({ variant: "destructive", title: "No students selected" });
-            return;
-        }
-        setIsSubmitting(true);
-        try {
-            await addMembersToTeam(teamId, selectedStudents);
-            toast({ title: "Members Added!", description: "The new members have been added to the team." });
-            onMembersAdded();
-            setIsOpen(false);
-            setSelectedStudents([]);
-        } catch (error: any) {
-            toast({ variant: "destructive", title: "Failed to Add Members", description: error.message });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button size="sm"><PlusCircle /> Add</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Add Members to {teamName}</DialogTitle>
-                    <DialogDescription>Select students from {schoolName} to add to the team.</DialogDescription>
-                </DialogHeader>
-                <div className="py-4 max-h-[60vh] overflow-y-auto">
-                    {loading ? (
-                        <div className="flex justify-center items-center h-24">
-                            <Loader2 className="animate-spin text-primary" />
-                            <p className="ml-2">Loading students...</p>
-                        </div>
-                    ) : students.length > 0 ? (
-                        <div className="space-y-3">
-                            {students.map(student => (
-                                <div key={student.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted">
-                                    <Checkbox
-                                        id={`student-${student.id}`}
-                                        onCheckedChange={(checked) => handleSelectStudent(student.id, !!checked)}
-                                        checked={selectedStudents.includes(student.id)}
-                                    />
-                                    <label
-                                        htmlFor={`student-${student.id}`}
-                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex-1"
-                                    >
-                                        {student.name} <span className="text-muted-foreground">({student.email})</span>
-                                    </label>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-center text-muted-foreground py-8">No available students found in this school.</p>
-                    )}
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting || selectedStudents.length === 0}>
-                        {isSubmitting ? <Loader2 className="animate-spin" /> : `Add ${selectedStudents.length} Member(s)`}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
 }

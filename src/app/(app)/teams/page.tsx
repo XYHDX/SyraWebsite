@@ -2,181 +2,231 @@
 
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Search, PlusCircle, Users } from "lucide-react";
-import { getTeams, getSchools, getCoaches, getUserById } from "@/lib/firestore";
+import { Search, Users, Trophy, Plus, MapPin, Building2 } from "lucide-react";
 import Link from "next/link";
-import { Skeleton } from '@/components/ui/skeleton';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { CreateTeamForm } from './CreateTeamForm';
-import { auth } from '@/lib/firebase';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { Skeleton } from "@/components/ui/skeleton";
+import CreateTeamForm from "./CreateTeamForm";
 
 interface Team {
-    id: string;
-    name: string;
-    schoolName: string;
-    coachName: string;
-    schoolId: string;
-    coachId: string;
-}
-
-interface School {
-    id: string;
-    name: string;
-}
-
-interface Coach {
-    id: string;
-    name: string;
-    school: string;
-}
-
-interface UserProfile {
-    uid: string;
-    role?: string;
-    schoolId?: string;
-    school?: string;
-    name?: string;
+  id: string;
+  name: string;
+  description: string;
+  school: string;
+  coach: string;
+  memberCount: number;
+  maxMembers: number;
+  status: string;
+  achievements: number;
 }
 
 export default function TeamsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
-  const [schools, setSchools] = useState<School[]>([]);
-  const [coaches, setCoaches] = useState<Coach[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [filteredTeams, setFilteredTeams] = useState<Team[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const [teamsData, schoolsData, coachesData] = await Promise.all([
-        getTeams(),
-        getSchools(),
-        getCoaches()
-    ]);
-    setTeams(teamsData as Team[]);
-    setSchools(schoolsData as School[]);
-    setCoaches(coachesData as Coach[]);
-    setLoading(false);
-  }, []);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    fetchData();
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        if (currentUser) {
-            const profile = await getUserById(currentUser.uid);
-            setUserProfile({ ...profile, uid: currentUser.uid } as UserProfile);
-        } else {
-            setUserProfile(null);
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (!response.ok) {
+          router.push('/login');
+          return;
         }
-    });
-    return () => unsubscribe();
-  }, [fetchData]);
+        
+        // For now, use mock data since we haven't migrated teams to Prisma yet
+        const mockTeams: Team[] = [
+          {
+            id: '1',
+            name: 'RoboMasters',
+            description: 'A competitive robotics team specializing in VEX competitions. We focus on innovative design and strategic gameplay.',
+            school: 'Damascus High School for Innovation',
+            coach: 'Dr. Ahmed Hassan',
+            memberCount: 4,
+            maxMembers: 4,
+            status: 'Active',
+            achievements: 8
+          },
+          {
+            id: '2',
+            name: 'Tech Titans',
+            description: 'University-level team working on advanced robotics projects including autonomous navigation and AI integration.',
+            school: 'Aleppo University Robotics Department',
+            coach: 'Prof. Sarah Al-Mahmoud',
+            memberCount: 3,
+            maxMembers: 5,
+            status: 'Active',
+            achievements: 12
+          },
+          {
+            id: '3',
+            name: 'Innovation Squad',
+            description: 'Technical institute team focused on practical robotics applications and industrial automation.',
+            school: 'Homs Technical Institute',
+            coach: 'Eng. Omar Khalil',
+            memberCount: 5,
+            maxMembers: 6,
+            status: 'Active',
+            achievements: 6
+          }
+        ];
+        
+        setTeams(mockTeams);
+        setFilteredTeams(mockTeams);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        router.push('/login');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const filteredTeams = useMemo(() => {
-    return teams.filter(team =>
+    checkAuth();
+  }, [router]);
+
+  useEffect(() => {
+    const filtered = teams.filter(team =>
       team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      team.schoolName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      team.coachName.toLowerCase().includes(searchTerm.toLowerCase())
+      team.school.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      team.coach.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    setFilteredTeams(filtered);
   }, [searchTerm, teams]);
 
-  const canCreateTeam = userProfile?.role === 'Admin' || userProfile?.role === 'Coach';
+  const handleTeamCreated = () => {
+    setShowCreateForm(false);
+    // In a real implementation, you would refresh the teams list
+  };
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-4 md:p-6 lg:p-8">
+        <div className="mb-8">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-5 w-80 mt-2" />
+        </div>
+        <div className="mb-6">
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4 w-32" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <main className="flex-1 p-4 md:p-6 lg:p-8">
-      <div className="flex flex-col items-center justify-center gap-4 mb-8 text-center">
-          <h1 className="text-3xl font-bold font-headline">Teams Directory</h1>
-          <p className="text-muted-foreground">Find and manage all the teams in the academy.</p>
+    <div className="flex-1 p-4 md:p-6 lg:p-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Robotics Teams</h1>
+        <p className="text-muted-foreground">Discover and join robotics teams across Syria</p>
       </div>
 
-       <div className="mb-6 flex justify-between items-center gap-4">
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search teams..." 
-            className="pl-8" 
+      <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search teams by name, school, or coach..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
           />
         </div>
-        {canCreateTeam && userProfile && (
-             <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-                <DialogTrigger asChild>
-                    <Button><PlusCircle/> Register New Team</Button>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Register a New Team</DialogTitle>
-                        <DialogDescription>Fill out the details to add a new team to the academy.</DialogDescription>
-                    </DialogHeader>
-                    <CreateTeamForm 
-                        onTeamCreated={fetchData}
-                        onFinished={() => setIsFormOpen(false)}
-                        schools={schools}
-                        coaches={coaches}
-                        userProfile={userProfile}
-                    />
-                </DialogContent>
-             </Dialog>
-        )}
+        <Button onClick={() => setShowCreateForm(!showCreateForm)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create Team
+        </Button>
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Team Name</TableHead>
-                <TableHead>School</TableHead>
-                <TableHead>Coach</TableHead>
-                <TableHead className="text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                        <TableCell><Skeleton className="h-6 w-40" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-32" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                        <TableCell className="text-right"><Skeleton className="h-8 w-24" /></TableCell>
-                    </TableRow>
-                ))
-              ) : filteredTeams.length > 0 ? (
-                filteredTeams.map((team) => (
-                    <TableRow key={team.id}>
-                        <TableCell className="font-medium">{team.name}</TableCell>
-                        <TableCell>
-                            <Link href={`/schools/${team.schoolId}`} className="hover:underline">{team.schoolName}</Link>
-                        </TableCell>
-                        <TableCell>
-                            <Link href={`/coaches/${team.coachId}`} className="hover:underline">{team.coachName}</Link>
-                        </TableCell>
-                        <TableCell className="text-right">
-                            <Button variant="outline" size="sm" asChild>
-                                <Link href={`/teams/${team.id}`}>View Team</Link>
-                            </Button>
-                        </TableCell>
-                    </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center">
-                    No teams found. {canCreateTeam && "Register one to get started!"}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </main>
+      {showCreateForm && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Create New Team</CardTitle>
+            <CardDescription>Form a robotics team to compete in competitions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CreateTeamForm onTeamCreated={handleTeamCreated} onFinished={() => setShowCreateForm(false)} />
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {filteredTeams.map((team) => (
+          <Card key={team.id} className="hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-lg">{team.name}</CardTitle>
+                  <CardDescription className="mt-1">{team.description}</CardDescription>
+                </div>
+                <Badge variant={team.status === 'Active' ? 'default' : 'secondary'}>
+                  {team.status}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Building2 className="h-4 w-4" />
+                  <span>{team.school}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Users className="h-4 w-4" />
+                  <span>Coach: {team.coach}</span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <MapPin className="h-4 w-4" />
+                  <span>{team.memberCount}/{team.maxMembers} members</span>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <Trophy className="h-4 w-4" />
+                  <span>{team.achievements} achievements</span>
+                </div>
+                <Badge variant="outline" className="text-xs">
+                  {team.memberCount < team.maxMembers ? 'Open' : 'Full'}
+                </Badge>
+              </div>
+              
+              <Link href={`/teams/${team.id}`}>
+                <Button className="w-full" size="sm">
+                  View Details
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {filteredTeams.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">No teams found matching your search.</p>
+        </div>
+      )}
+    </div>
   );
 }

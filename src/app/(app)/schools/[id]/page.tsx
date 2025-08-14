@@ -2,211 +2,248 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSchoolById, getUserById, getCoachesBySchool, getTeamsBySchool } from "@/lib/firestore";
+import { useParams, useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { MapPin, Users, Building2, Trophy, ArrowLeft, Phone, Mail, Globe } from "lucide-react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, User, MapPin, ArrowLeft, Loader2 } from "lucide-react";
-import { useParams } from "next/navigation";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { EditSchoolButton } from "./EditSchoolButton";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface School {
-    id: string;
-    name: string;
-    location: string;
-    teams: number;
-    coach: string;
-    about?: string;
-    adminId?: string;
+  id: string;
+  name: string;
+  location: string;
+  description: string;
+  studentCount: number;
+  coachCount: number;
+  status: string;
+  contact: {
+    phone: string;
+    email: string;
+    website: string;
+  };
+  programs: string[];
+  achievements: string[];
 }
 
-interface Coach {
-    id: string;
-    name: string;
-    avatar: string;
-}
-
-interface Team {
-    id: string;
-    name: string;
-}
-
-interface UserProfile {
-  role?: string;
-  schoolId?: string;
-}
-
-export default function SchoolProfilePage() {
-  const params = useParams<{ id: string }>();
+export default function SchoolDetailPage() {
+  const params = useParams();
+  const router = useRouter();
   const [school, setSchool] = useState<School | null>(null);
-  const [coaches, setCoaches] = useState<Coach[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isSchoolAdmin, setIsSchoolAdmin] = useState(false);
 
-  const fetchSchoolData = async () => {
-      const id = params.id as string;
-      if (!id) return;
-      
+  useEffect(() => {
+    const checkAuth = async () => {
       try {
-        setLoading(true);
-        const schoolData = await getSchoolById(id);
-        if (schoolData) {
-          setSchool(schoolData as School);
-          const [coachData, teamData] = await Promise.all([
-             getCoachesBySchool(schoolData.name),
-             getTeamsBySchool(id)
-          ]);
-          setCoaches(coachData as Coach[]);
-          setTeams(teamData as Team[]);
-        } else {
-          setError("School not found.");
+        const response = await fetch('/api/auth/me');
+        if (!response.ok) {
+          router.push('/login');
+          return;
         }
-      } catch (err) {
-        setError("Failed to load school profile.");
-        console.error(err);
+        
+        // For now, use mock data since we haven't migrated schools to Prisma yet
+        const mockSchool: School = {
+          id: params.id as string,
+          name: 'Damascus High School for Innovation',
+          location: 'Damascus, Syria',
+          description: 'A leading institution focused on robotics and technology education. We offer comprehensive programs in VEX robotics, Arduino programming, and team competitions. Our state-of-the-art facilities and experienced coaching staff provide students with the skills and knowledge needed to excel in robotics competitions.',
+          studentCount: 150,
+          coachCount: 8,
+          status: 'Active',
+          contact: {
+            phone: '+963 11 123 4567',
+            email: 'info@damascus-innovation.edu.sy',
+            website: 'www.damascus-innovation.edu.sy'
+          },
+          programs: [
+            'VEX Robotics Competition',
+            'Arduino Programming',
+            'Python for Robotics',
+            'Team Building & Leadership',
+            'Competition Preparation'
+          ],
+          achievements: [
+            'National Robotics Champions 2023',
+            'Best Innovation Award 2022',
+            'Regional Competition Winners 2021',
+            'Excellence in Education Award 2020'
+          ]
+        };
+        
+        setSchool(mockSchool);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        router.push('/login');
       } finally {
         setLoading(false);
       }
     };
 
-  useEffect(() => {
-    fetchSchoolData();
-
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        if(currentUser) {
-            const profile = await getUserById(currentUser.uid) as UserProfile;
-            setUserProfile(profile);
-            setIsSchoolAdmin(profile?.role === 'School Admin' && profile?.schoolId === params.id);
-        } else {
-            setUserProfile(null);
-            setIsSchoolAdmin(false);
-        }
-    });
-
-    return () => unsubscribe();
-
-  }, [params.id]);
-
+    checkAuth();
+  }, [params.id, router]);
 
   if (loading) {
     return (
-        <main className="flex-1 p-4 md:p-6 lg:p-8 flex items-center justify-center">
-             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </main>
-    )
-  }
-
-  if (error) {
-     return <main className="flex-1 p-8 text-center text-destructive">{error}</main>;
+      <div className="flex-1 p-4 md:p-6 lg:p-8">
+        <div className="mb-8">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-5 w-80 mt-2" />
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-7 w-32" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-20 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (!school) {
-    return <main className="flex-1 p-8 text-center text-muted-foreground">School not found.</main>;
+    return (
+      <div className="flex-1 p-4 md:p-6 lg:p-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">School not found</h1>
+          <p className="text-muted-foreground">The requested school could not be found.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <main className="flex-1 p-4 md:p-6 lg:p-8">
-      <div className="flex justify-between items-center mb-8">
-        <Button variant="outline" asChild>
-          <Link href="/schools"><ArrowLeft className="mr-2 h-4 w-4" />Back to Schools</Link>
-        </Button>
-        {isSchoolAdmin && school && (
-            <EditSchoolButton school={school} onSchoolUpdated={fetchSchoolData} />
-        )}
+    <div className="flex-1 p-4 md:p-6 lg:p-8">
+      <div className="mb-8">
+        <Link href="/schools" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Schools
+        </Link>
+        <h1 className="text-3xl font-bold">{school.name}</h1>
+        <p className="text-muted-foreground">Learn more about this robotics academy</p>
       </div>
-      
-      <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-4xl font-headline">{school.name}</CardTitle>
-                    <CardDescription className="flex items-center gap-2 pt-2 text-muted-foreground">
-                        <MapPin className="h-4 w-4" /> {school.location}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="flex items-center gap-2">
-                            <Users className="h-5 w-5 text-primary"/>
-                            <div>
-                                <p className="font-semibold">{teams.length} Teams</p>
-                                <p className="text-muted-foreground">Actively Competing</p>
-                            </div>
-                        </div>
-                         <div className="flex items-center gap-2">
-                            <User className="h-5 w-5 text-primary"/>
-                             <div>
-                                <p className="font-semibold">{coaches.length} Coaches</p>
-                                <p className="text-muted-foreground">Mentoring students</p>
-                            </div>
-                        </div>
-                    </div>
-                     <div className="mt-8">
-                        <h3 className="text-xl font-semibold mb-4">About the School</h3>
-                        <p className="text-muted-foreground whitespace-pre-wrap">
-                          {school.about || "Information about the school's robotics program, history, and philosophy will be displayed here."}
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
+
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Main Content */}
+        <div className="md:col-span-2 space-y-6">
+          {/* School Overview */}
+          <Card>
+            <CardHeader>
+              <CardTitle>About {school.name}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground leading-relaxed">{school.description}</p>
+            </CardContent>
+          </Card>
+
+          {/* Programs */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Robotics Programs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-2">
+                {school.programs.map((program, index) => (
+                  <div key={index} className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                    <div className="h-2 w-2 bg-primary rounded-full"></div>
+                    <span className="font-medium">{program}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Achievements */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5" />
+                Recent Achievements
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {school.achievements.map((achievement, index) => (
+                  <div key={index} className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <Badge variant="outline">🏆</Badge>
+                    <span className="font-medium">{achievement}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
-         <div className="lg:col-span-1 space-y-6">
-             <Card>
-                <CardHeader>
-                    <CardTitle>Coaches</CardTitle>
-                </CardHeader>
-                <CardContent>
-                   {coaches.length > 0 ? (
-                    <ul className="space-y-4">
-                        {coaches.map(coach => (
-                            <li key={coach.id} className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="h-10 w-10">
-                                        <AvatarImage src={coach.avatar} />
-                                        <AvatarFallback>{coach.name.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                    <span className="font-medium">{coach.name}</span>
-                                </div>
-                                <Button size="sm" variant="outline" asChild>
-                                    <Link href={`/coaches/${coach.id}`}>View</Link>
-                                </Button>
-                            </li>
-                        ))}
-                    </ul>
-                   ) : (
-                    <p className="text-muted-foreground text-sm text-center py-4">No coaches are currently assigned to this school.</p>
-                   )}
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle>Registered Teams</CardTitle>
-                </CardHeader>
-                <CardContent>
-                   {teams.length > 0 ? (
-                       <ul className="space-y-3">
-                           {teams.map(team => (
-                               <li key={team.id} className="flex items-center justify-between">
-                                   <span className="font-medium">{team.name}</span>
-                                   <Button size="sm" variant="outline" asChild>
-                                       <Link href={`/teams/${team.id}`}>View</Link>
-                                   </Button>
-                               </li>
-                           ))}
-                       </ul>
-                   ) : (
-                    <p className="text-muted-foreground text-sm text-center py-4">No teams have been registered for this school yet.</p>
-                   )}
-                </CardContent>
-            </Card>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* School Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle>School Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span>{school.location}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span>{school.studentCount} students</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <span>{school.coachCount} coaches</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Badge variant={school.status === 'Active' ? 'default' : 'secondary'}>
+                  {school.status}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Contact Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Contact Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <span>{school.contact.phone}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <span>{school.contact.email}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                <span>{school.contact.website}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button className="w-full">
+                Contact School
+              </Button>
+              <Button variant="outline" className="w-full">
+                View Coaches
+              </Button>
+              <Button variant="outline" className="w-full">
+                Join Program
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

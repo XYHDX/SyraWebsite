@@ -2,216 +2,202 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getCoachById, updateCoachProfile } from "@/lib/firestore";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { ArrowLeft, School, Users, Edit, Save, Loader2 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useParams, useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useParams } from "next/navigation";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { useToast } from "@/hooks/use-toast";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Mail, Phone, MapPin, Trophy, Users } from "lucide-react";
 
-
-interface CoachProfile {
-    name: string;
-    school: string;
-    schoolId?: string;
-    expertise: string;
-    avatar: string;
-    about: string;
+interface Coach {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  location: string;
+  bio: string;
+  specialties: string[];
+  achievements: string[];
+  teamsCount: number;
 }
 
-export default function CoachProfilePage() {
-  const params = useParams<{ id: string }>();
-  const [coach, setCoach] = useState<CoachProfile | null>(null);
+export default function CoachDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const [coach, setCoach] = useState<Coach | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isOwnProfile, setIsOwnProfile] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
 
-  // Form state
-  const [about, setAbout] = useState('');
-  const [expertise, setExpertise] = useState('');
-  const { toast } = useToast();
-  
   useEffect(() => {
-    const id = params.id as string;
-    if (!id) return;
-
-    const fetchCoach = async () => {
+    const checkAuth = async () => {
       try {
-        setLoading(true);
-        const coachData = await getCoachById(id);
-        
-        if (coachData) {
-            setCoach(coachData as CoachProfile);
-            setAbout(coachData.about);
-            setExpertise(coachData.expertise);
-        } else {
-            setError("Coach not found.");
+        const response = await fetch('/api/auth/me');
+        if (!response.ok) {
+          router.push('/login');
+          return;
         }
-      } catch (err) {
-        setError("Failed to load profile data.");
-        console.error(err);
+        
+        // For now, use mock data since we haven't migrated coaches to Prisma yet
+        const mockCoach: Coach = {
+          id: params.id as string,
+          name: 'Dr. Ahmed Hassan',
+          email: 'ahmed.hassan@academy.edu.sy',
+          phone: '+963 11 123 4567',
+          location: 'Damascus, Syria',
+          bio: 'Experienced robotics coach with over 10 years of experience in VEX and FIRST robotics competitions. Specializes in programming and mechanical design.',
+          specialties: ['VEX Robotics', 'FIRST Robotics', 'Arduino Programming', 'Team Management'],
+          achievements: [
+            'National Robotics Champion 2023',
+            'Best Coach Award 2022',
+            'International Competition Finalist 2021'
+          ],
+          teamsCount: 5
+        };
+        
+        setCoach(mockCoach);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        router.push('/login');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCoach();
-
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-        setCurrentUser(user);
-        setIsOwnProfile(user?.uid === id);
-    });
-
-    return () => unsubscribe();
-
-  }, [params.id]);
-
-  const handleSave = async () => {
-    if (!coach) return;
-    setIsSaving(true);
-    try {
-        await updateCoachProfile(params.id as string, { about, expertise });
-        setCoach(prev => prev ? {...prev, about, expertise} : null);
-        setIsEditing(false);
-        toast({ title: "Profile Updated", description: "Your changes have been saved."});
-    } catch(err: any) {
-        toast({ variant: "destructive", title: "Update Failed", description: err.message });
-    } finally {
-        setIsSaving(false);
-    }
-  }
-
+    checkAuth();
+  }, [params.id, router]);
 
   if (loading) {
     return (
-        <main className="flex-1 p-4 md:p-6 lg:p-8">
-             <div className="mb-8">
-                <Skeleton className="h-10 w-48" />
-            </div>
-             <div className="grid gap-8 lg:grid-cols-3">
-                <div className="lg:col-span-1">
-                    <Card>
-                        <CardContent className="pt-6 flex flex-col items-center text-center">
-                            <Skeleton className="h-32 w-32 rounded-full mb-4" />
-                            <Skeleton className="h-8 w-40 mb-2" />
-                            <Skeleton className="h-5 w-32" />
-                        </CardContent>
-                    </Card>
-                </div>
-                <div className="lg:col-span-2">
-                    <Card>
-                        <CardHeader><Skeleton className="h-8 w-1/2" /></CardHeader>
-                        <CardContent className="space-y-4">
-                            <Skeleton className="h-5 w-full" />
-                            <Skeleton className="h-5 w-5/6" />
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
-        </main>
-    )
-  }
-
-  if (error) {
-     return <main className="flex-1 p-8 text-center text-destructive">{error}</main>;
+      <div className="flex-1 p-4 md:p-6 lg:p-8">
+        <div className="mb-8">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-5 w-80 mt-2" />
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-7 w-32" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-20 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   if (!coach) {
-    return <main className="flex-1 p-8 text-center text-muted-foreground">Coach not found.</main>;
+    return (
+      <div className="flex-1 p-4 md:p-6 lg:p-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Coach not found</h1>
+          <p className="text-muted-foreground">The requested coach could not be found.</p>
+        </div>
+      </div>
+    );
   }
 
-  const SchoolLink = coach.schoolId
-    ? ({ children }: { children: React.ReactNode }) => <Link href={`/schools/${coach.schoolId}`} className="hover:underline">{children}</Link>
-    : ({ children }: { children: React.ReactNode }) => <>{children}</>;
-
   return (
-    <main className="flex-1 p-4 md:p-6 lg:p-8">
-      <div className="flex justify-between items-center mb-8">
-        <Button variant="outline" asChild>
-          <Link href="/coaches"><ArrowLeft className="mr-2 h-4 w-4" />Back to Coaches</Link>
-        </Button>
-        {isOwnProfile && !isEditing && (
-            <Button onClick={() => setIsEditing(true)}><Edit className="mr-2 h-4 w-4"/>Edit Profile</Button>
-        )}
+    <div className="flex-1 p-4 md:p-6 lg:p-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Coach Profile</h1>
+        <p className="text-muted-foreground">Learn more about our robotics expert</p>
       </div>
-      
-      <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-1">
-             <Card>
-                <CardContent className="pt-6 flex flex-col items-center text-center">
-                    <Avatar className="h-32 w-32 mb-4">
-                        <AvatarImage src={coach.avatar} />
-                        <AvatarFallback>{coach.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <CardTitle className="text-2xl font-headline">{coach.name}</CardTitle>
-                    <CardDescription className="flex items-center gap-2 mt-2">
-                        <School className="h-4 w-4" />
-                        <SchoolLink>{coach.school}</SchoolLink>
-                    </CardDescription>
-                     <div className="flex flex-wrap justify-center gap-2 mt-4">
-                        {isEditing ? (
-                             <div className="w-full px-4 pt-2 text-left">
-                                <Label htmlFor="expertise">Expertise (comma-separated)</Label>
-                                <Input id="expertise" value={expertise} onChange={e => setExpertise(e.target.value)} placeholder="e.g., VEX, Arduino, Python"/>
-                            </div>
-                        ) : (
-                             coach.expertise && coach.expertise.split(',').map(exp => (
-                                exp.trim() && <Badge key={exp} variant="secondary">{exp.trim()}</Badge>
-                            ))
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Coach Info Card */}
+        <div className="md:col-span-1">
+          <Card>
+            <CardHeader className="text-center">
+              <Avatar className="h-24 w-24 mx-auto mb-4">
+                <AvatarImage src="/avatars/coach.jpg" alt={coach.name} />
+                <AvatarFallback className="text-2xl">{coach.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <CardTitle>{coach.name}</CardTitle>
+              <CardDescription>Robotics Coach</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <span>{coach.email}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <span>{coach.phone}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span>{coach.location}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span>{coach.teamsCount} teams</span>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-        <div className="lg:col-span-2">
-            <Card>
-                <CardHeader>
-                    <CardTitle>About {coach.name}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {isEditing ? (
-                        <div className="space-y-2">
-                            <Label htmlFor="about">About Section</Label>
-                            <Textarea 
-                                id="about"
-                                value={about}
-                                onChange={(e) => setAbout(e.target.value)}
-                                rows={10}
-                                placeholder="Write a short biography..."
-                            />
-                        </div>
-                    ) : (
-                       <p className="text-muted-foreground whitespace-pre-wrap">{coach.about || `Detailed biography for ${coach.name} will be displayed here.`}</p>
-                    )}
-                     <div className="mt-8">
-                        <h3 className="text-xl font-semibold mb-4 flex items-center"><Users className="mr-2 h-5 w-5 text-primary"/>Current Teams</h3>
-                        <p className="text-muted-foreground">A list of teams currently mentored by {coach.name} will appear here. To create a new team, go to the <Link href="/teams" className="text-primary hover:underline">Teams page</Link>.</p>
-                    </div>
-                </CardContent>
-                {isEditing && (
-                    <CardFooter className="justify-end gap-2">
-                        <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
-                        <Button onClick={handleSave} disabled={isSaving}>
-                            {isSaving ? <Loader2 className="animate-spin" /> : <Save />}
-                            Save
-                        </Button>
-                    </CardFooter>
-                )}
-            </Card>
+
+        {/* Coach Details */}
+        <div className="md:col-span-2 space-y-6">
+          {/* Bio */}
+          <Card>
+            <CardHeader>
+              <CardTitle>About</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">{coach.bio}</p>
+            </CardContent>
+          </Card>
+
+          {/* Specialties */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Specialties</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {coach.specialties.map((specialty, index) => (
+                  <Badge key={index} variant="secondary">
+                    {specialty}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Achievements */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5" />
+                Achievements
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {coach.achievements.map((achievement, index) => (
+                  <li key={index} className="flex items-center gap-2">
+                    <div className="h-2 w-2 bg-primary rounded-full"></div>
+                    <span>{achievement}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+
+          {/* Contact Button */}
+          <div className="flex gap-4">
+            <Button className="flex-1">
+              <Mail className="h-4 w-4 mr-2" />
+              Send Message
+            </Button>
+            <Button variant="outline" className="flex-1">
+              <Phone className="h-4 w-4 mr-2" />
+              Call Coach
+            </Button>
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -2,263 +2,243 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getCompetitionById, getTeamsForCoach, getUserById, registerTeamForCompetition } from "@/lib/firestore";
-import { Calendar, Users, ArrowLeft, Loader2, PlusCircle } from "lucide-react";
-import { format } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Calendar, MapPin, Users, Trophy, ArrowLeft, Clock, Award } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
-import { useParams } from "next/navigation";
-import { useToast } from "@/hooks/use-toast";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 
 interface Competition {
   id: string;
   name: string;
+  date: string;
+  location: string;
   description: string;
-  date: Date;
+  maxTeams: number;
+  currentTeams: number;
   status: string;
-  registeredTeams: any[];
-}
-
-interface Team {
-  id: string;
-  name: string;
-  coachName: string;
-}
-
-interface UserProfile {
-  role?: string;
-  uid?: string;
+  rules: string[];
+  prizes: string[];
+  registrationDeadline: string;
 }
 
 export default function CompetitionDetailPage() {
-  const params = useParams<{ id: string }>();
+  const params = useParams();
+  const router = useRouter();
   const [competition, setCompetition] = useState<Competition | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isCoach, setIsCoach] = useState(false);
-  const [coachTeams, setCoachTeams] = useState<Team[]>([]);
-  const { toast } = useToast();
-
-  const fetchCompetitionData = async (id: string) => {
-      setLoading(true);
-      const comp = await getCompetitionById(id);
-      setCompetition(comp);
-      setLoading(false);
-  }
 
   useEffect(() => {
-    const id = params.id as string;
-    if (!id) return;
-
-    fetchCompetitionData(id);
-
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        if(currentUser) {
-            const profile = await getUserById(currentUser.uid);
-            setUserProfile({ ...profile, uid: currentUser.uid } as UserProfile);
-            const coachStatus = profile?.role === 'Coach';
-            setIsCoach(coachStatus);
-            if (coachStatus) {
-                const teams = await getTeamsForCoach(currentUser.uid);
-                setCoachTeams(teams as Team[]);
-            }
-        } else {
-            setUserProfile(null);
-            setIsCoach(false);
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (!response.ok) {
+          router.push('/login');
+          return;
         }
-    });
+        
+        // For now, use mock data since we haven't migrated competitions to Prisma yet
+        const mockCompetition: Competition = {
+          id: params.id as string,
+          name: 'VEX Robotics Competition 2024',
+          date: '2024-03-15',
+          location: 'Damascus Convention Center',
+          description: 'Join us for the most exciting robotics competition of the year! Teams will compete in various challenges including autonomous navigation, object manipulation, and creative problem-solving. This competition is open to all skill levels and encourages innovation and teamwork.',
+          maxTeams: 50,
+          currentTeams: 32,
+          status: 'Upcoming',
+          rules: [
+            'Teams must consist of 2-4 students',
+            'All robots must be built using VEX parts',
+            'Programming must be done using VEXcode',
+            'Teams must follow safety guidelines',
+            'No modifications to competition field allowed'
+          ],
+          prizes: [
+            '1st Place: $1000 + Trophy + Certificates',
+            '2nd Place: $500 + Medals + Certificates',
+            '3rd Place: $250 + Medals + Certificates',
+            'Best Design Award: $200 + Special Recognition',
+            'Innovation Award: $200 + Special Recognition'
+          ],
+          registrationDeadline: '2024-02-28'
+        };
+        
+        setCompetition(mockCompetition);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        router.push('/login');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    return () => unsubscribe();
-  }, [params.id]);
-
+    checkAuth();
+  }, [params.id, router]);
 
   if (loading) {
     return (
-        <main className="flex-1 p-4 md:p-6 lg:p-8 flex items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </main>
+      <div className="flex-1 p-4 md:p-6 lg:p-8">
+        <div className="mb-8">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-5 w-80 mt-2" />
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-7 w-32" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-20 w-full" />
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   if (!competition) {
     return (
-        <main className="flex-1 p-4 md:p-6 lg:p-8 text-center">
-            <h1 className="text-2xl font-bold">Competition Not Found</h1>
-            <p className="text-muted-foreground">The competition you are looking for does not exist.</p>
-            <Button asChild className="mt-4">
-                <Link href="/competitions">Back to all competitions</Link>
-            </Button>
-        </main>
+      <div className="flex-1 p-4 md:p-6 lg:p-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold">Competition not found</h1>
+          <p className="text-muted-foreground">The requested competition could not be found.</p>
+        </div>
+      </div>
     );
   }
 
-  const isRegisterable = competition.status !== 'Completed';
+  const isRegistrationOpen = new Date(competition.registrationDeadline) > new Date();
+  const daysUntilDeadline = Math.ceil((new Date(competition.registrationDeadline).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
 
   return (
-    <main className="flex-1 p-4 md:p-6 lg:p-8">
+    <div className="flex-1 p-4 md:p-6 lg:p-8">
       <div className="mb-8">
-        <Button variant="outline" asChild>
-          <Link href="/competitions"><ArrowLeft className="mr-2 h-4 w-4" />Back to all competitions</Link>
-        </Button>
+        <Link href="/competitions" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4">
+          <ArrowLeft className="h-4 w-4" />
+          Back to Competitions
+        </Link>
+        <h1 className="text-3xl font-bold">{competition.name}</h1>
+        <p className="text-muted-foreground">Join the competition and showcase your robotics skills</p>
       </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-        <div className="lg:col-span-2">
-            <Card>
-                <CardHeader>
-                    <div className="flex justify-between items-start">
-                        <Badge variant={competition.status === 'Completed' ? 'secondary' : 'default'} className="w-fit mb-2">
-                            {competition.status}
-                        </Badge>
-                         <div className="flex items-center text-muted-foreground text-sm">
-                            <Calendar className="h-4 w-4 mr-2" />
-                            <span>{format(new Date(competition.date), "PPP")}</span>
-                        </div>
-                    </div>
-                    <CardTitle className="text-4xl font-headline tracking-tight">{competition.name}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-lg text-muted-foreground">{competition.description}</p>
-                    
-                    <div className="mt-8 prose prose-p:text-muted-foreground max-w-none">
-                        <h3 className="text-xl font-semibold mb-4 text-foreground">About this Competition</h3>
-                        <p>Placeholder text for more detailed information about the competition's theme, objectives, and the challenges participants will face. This section can be expanded with rich text, images, and videos.</p>
-                         <p>Further details will elaborate on the specific tasks, scoring mechanisms, and unique constraints that define this year's challenge, ensuring all teams have a clear understanding of what is required to succeed.</p>
-                    </div>
 
-                     <div className="mt-8 prose prose-p:text-muted-foreground max-w-none">
-                        <h3 className="text-xl font-semibold mb-4 text-foreground">Rules &amp; Regulations</h3>
-                        <p>Placeholder for the official rulebook. This might include robot specifications, game rules, scoring details, and eligibility requirements. A downloadable PDF could be linked here for comprehensive guidelines.</p>
-                    </div>
-                </CardContent>
-            </Card>
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Main Content */}
+        <div className="md:col-span-2 space-y-6">
+          {/* Competition Overview */}
+          <Card>
+            <CardHeader>
+              <CardTitle>About the Competition</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground leading-relaxed">{competition.description}</p>
+            </CardContent>
+          </Card>
+
+          {/* Rules */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Competition Rules</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                {competition.rules.map((rule, index) => (
+                  <li key={index} className="flex items-start gap-2">
+                    <div className="h-2 w-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
+                    <span>{rule}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+
+          {/* Prizes */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="h-5 w-5" />
+                Prizes & Awards
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {competition.prizes.map((prize, index) => (
+                  <div key={index} className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <Badge variant={index === 0 ? 'default' : index === 1 ? 'secondary' : 'outline'}>
+                      {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🏆'}
+                    </Badge>
+                    <span className="font-medium">{prize}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
-        <div className="lg:col-span-1 space-y-6 sticky top-24">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Competition Registration</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {isRegisterable ? (
-                        isCoach ? (
-                            <>
-                                <p className="mb-4 text-muted-foreground text-sm">To enter this competition, please register one of your existing teams below.</p>
-                                <TeamRegistrationDialog 
-                                    competition={competition}
-                                    coachTeams={coachTeams}
-                                    onRegistrationSuccess={() => fetchCompetitionData(params.id as string)}
-                                />
-                            </>
-                        ) : (
-                             <p className="mb-4 text-muted-foreground text-sm">Only a team's coach can register them for a competition.</p>
-                        )
-                    ) : (
-                         <p className="text-muted-foreground text-sm">Registration for this event has closed.</p>
-                    )}
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center text-xl"><Users className="mr-2 h-5 w-5 text-primary"/>Registered Teams</CardTitle>
-                </CardHeader>
-                <CardContent>
-                     {competition.registeredTeams.length > 0 ? (
-                        <ul className="space-y-2">
-                           {competition.registeredTeams.map(team => (
-                               <li key={team.id} className="text-sm">
-                                   <p className="font-semibold">{team.teamName}</p>
-                                   <p className="text-xs text-muted-foreground">Coached by {team.coachName}</p>
-                               </li>
-                           ))}
-                        </ul>
-                    ) : (
-                        <p className="text-muted-foreground text-sm">No teams have been approved for this competition yet.</p>
-                    )}
-                </CardContent>
-            </Card>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Competition Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Competition Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <span>{competition.date}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span>{competition.location}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span>{competition.currentTeams}/{competition.maxTeams} teams</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Trophy className="h-4 w-4 text-muted-foreground" />
+                <span>{competition.status}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Registration */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Registration</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center">
+                <Badge variant={isRegistrationOpen ? 'default' : 'destructive'} className="mb-2">
+                  {isRegistrationOpen ? 'Open' : 'Closed'}
+                </Badge>
+                <p className="text-sm text-muted-foreground">
+                  {isRegistrationOpen 
+                    ? `Deadline: ${competition.registrationDeadline} (${daysUntilDeadline} days left)`
+                    : 'Registration has closed'
+                  }
+                </p>
+              </div>
+              
+              {isRegistrationOpen && competition.currentTeams < competition.maxTeams ? (
+                <Button className="w-full">
+                  Register Team
+                </Button>
+              ) : (
+                <Button className="w-full" disabled>
+                  {competition.currentTeams >= competition.maxTeams ? 'Full' : 'Registration Closed'}
+                </Button>
+              )}
+              
+              <p className="text-xs text-muted-foreground text-center">
+                {competition.maxTeams - competition.currentTeams} spots remaining
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </main>
+    </div>
   );
-}
-
-
-function TeamRegistrationDialog({ competition, coachTeams, onRegistrationSuccess }: { competition: Competition, coachTeams: Team[], onRegistrationSuccess: () => void }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [selectedTeamId, setSelectedTeamId] = useState("");
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const { toast } = useToast();
-
-    // Filter out teams that are already registered or pending
-    const availableTeams = coachTeams.filter(ct => !competition.registeredTeams.some(rt => rt.id === ct.id));
-
-    const handleSubmit = async () => {
-        if (!selectedTeamId) {
-            toast({ variant: "destructive", title: "Please select a team." });
-            return;
-        }
-        setIsSubmitting(true);
-        try {
-            const selectedTeam = coachTeams.find(t => t.id === selectedTeamId);
-            if (!selectedTeam) throw new Error("Selected team not found.");
-
-            await registerTeamForCompetition(competition.id, selectedTeam);
-            toast({ title: "Registration Submitted!", description: `${selectedTeam.name} is now pending approval.` });
-            setIsOpen(false);
-            onRegistrationSuccess();
-        } catch (error: any) {
-            toast({ variant: "destructive", title: "Registration Failed", description: error.message });
-        } finally {
-            setIsSubmitting(false);
-        }
-    }
-
-
-    return (
-         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button className="w-full" disabled={!isRegisterable}><PlusCircle />Register a Team</Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Register a Team for {competition.name}</DialogTitle>
-                    <DialogDescription>Select one of your teams to register for this competition.</DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4">
-                    {availableTeams.length > 0 ? (
-                        <div className="space-y-2">
-                             <Label htmlFor="team-select">Select a team</Label>
-                             <Select onValueChange={setSelectedTeamId} disabled={isSubmitting}>
-                                <SelectTrigger id="team-select">
-                                    <SelectValue placeholder="Choose a team..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {availableTeams.map(team => (
-                                        <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    ) : (
-                        <p className="text-sm text-center text-muted-foreground py-4">All of your teams are already registered for this competition.</p>
-                    )}
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting || !selectedTeamId || availableTeams.length === 0}>
-                        {isSubmitting ? <Loader2 className="animate-spin mr-2" /> : null}
-                        Submit for Approval
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
 }
