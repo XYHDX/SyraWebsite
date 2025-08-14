@@ -21,6 +21,17 @@ const nextConfig: NextConfig = {
       }
     ],
   },
+  webpack: (config) => {
+    // Avoid bundling optional tracing/exporter modules and firebase plugin that Genkit may optionally import
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...(config.resolve?.alias || {}),
+      '@opentelemetry/exporter-jaeger': false,
+      '@opentelemetry/exporter-zipkin': false,
+      '@genkit-ai/firebase': false,
+    };
+    return config;
+  },
 };
 
 export default nextConfig;

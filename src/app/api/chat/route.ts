@@ -36,3 +36,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
+
+// Ensure Node.js runtime and dynamic behavior on Vercel/Next
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';

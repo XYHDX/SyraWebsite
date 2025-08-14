@@ -1,5 +1,6 @@
 
 "use client";
+export const dynamic = 'force-dynamic';
 
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -9,9 +10,7 @@ import { Bot, Send, User } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import { useChat } from 'ai/react';
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+// Firebase will be imported lazily inside effects to avoid SSR/prerender usage
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,26 +26,40 @@ export default function AiCoachPage() {
     const router = useRouter();
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                const userDocRef = doc(db, 'users', currentUser.uid);
-                const userDocSnap = await getDoc(userDocRef);
-                if (userDocSnap.exists()) {
-                    const profile = userDocSnap.data() as UserProfile;
-                    setUserProfile(profile);
-                    if (profile.role !== 'Admin' && profile.role !== 'Coach') {
+        let unsubscribe: undefined | (() => void);
+        let isMounted = true;
+
+        const init = async () => {
+            const firebase = await import('@/lib/firebase');
+            const { onAuthStateChanged } = await import('firebase/auth');
+            const { doc, getDoc } = await import('firebase/firestore');
+
+            if (!isMounted) return;
+            unsubscribe = onAuthStateChanged(firebase.auth, async (currentUser) => {
+                if (currentUser) {
+                    const userDocRef = doc(firebase.db, 'users', currentUser.uid);
+                    const userDocSnap = await getDoc(userDocRef);
+                    if (userDocSnap.exists()) {
+                        const profile = userDocSnap.data() as UserProfile;
+                        setUserProfile(profile);
+                        if (profile.role !== 'Admin' && profile.role !== 'Coach') {
+                            router.push('/dashboard');
+                        }
+                    } else {
                         router.push('/dashboard');
                     }
                 } else {
-                     router.push('/dashboard');
+                    router.push('/login');
                 }
-            } else {
-                router.push('/login');
-            }
-            setLoading(false);
-        });
+                setLoading(false);
+            });
+        };
 
-        return () => unsubscribe();
+        void init();
+        return () => {
+            isMounted = false;
+            if (unsubscribe) unsubscribe();
+        };
     }, [router]);
     
     const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
