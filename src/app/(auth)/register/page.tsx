@@ -1,216 +1,149 @@
 
 "use client";
 
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { useToast } from "@/hooks/use-toast";
-import { doc, setDoc } from "firebase/firestore";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getSchools } from "@/lib/firestore";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-interface School {
-    id: string;
-    name: string;
-}
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
 
 export default function RegisterPage() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [selectedSchool, setSelectedSchool] = useState('');
-  const [schools, setSchools] = useState<School[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchSchools = async () => {
-        const schoolsData = await getSchools();
-        setSchools(schoolsData as School[]);
-    };
-    fetchSchools();
-  }, []);
-
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name) {
-        toast({
-            variant: "destructive",
-            title: "Registration Failed",
-            description: "Please enter your full name.",
-        });
-        return;
-    }
-     if (password !== confirmPassword) {
-        toast({
-            variant: "destructive",
-            title: "Registration Failed",
-            description: "Passwords do not match.",
-        });
-        return;
-    }
-     if (!selectedSchool) {
-        toast({
-            variant: "destructive",
-            title: "Registration Failed",
-            description: "Please select your school.",
-        });
-        return;
-    }
-
-    setIsLoading(true);
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      await updateProfile(user, { displayName: name });
-
-      await setDoc(doc(db, "users", user.uid), {
-        name: name,
-        email: user.email,
-        phone: phone,
-        role: "Student",
-        school: selectedSchool,
-        contributions: 0,
-        createdAt: new Date(),
-      });
-
+    
+    if (password !== confirmPassword) {
       toast({
-        title: "Account Created!",
-        description: "Welcome to the Syrian Robotic Academy!",
-      });
-
-      router.push('/dashboard');
-
-    } catch (error: any) {
-      console.error('Registration error:', error.code, error.message);
-      let description = "An unexpected error occurred. Please try again.";
-      if (error.code === 'auth/email-already-in-use') {
-        description = "This email address is already in use by another account.";
-      } else if (error.code === 'auth/weak-password') {
-        description = "The password is too weak. Please choose a stronger password.";
-      }
-      toast({
+        title: "Error",
+        description: "Passwords do not match",
         variant: "destructive",
-        title: "Registration Failed",
-        description: description,
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Account created successfully!",
+        });
+        router.push('/dashboard');
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Registration failed",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Create an Account</CardTitle>
-          <CardDescription>Join the academy to start your robotics journey.</CardDescription>
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl text-center">Create an account</CardTitle>
+          <CardDescription className="text-center">
+            Enter your information to create your account
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleRegister} className="grid gap-4">
-            <div className="grid gap-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input 
-                  id="name"
-                  name="name"
-                  placeholder="John Doe" 
-                  required 
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={isLoading}
-                  autoComplete="name"
-                />
-              </div>
-            <div className="grid gap-2">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="Enter your full name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email" 
-                name="email"
-                type="email" 
-                placeholder="m@example.com" 
-                required 
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
-                autoComplete="email"
+                required
               />
             </div>
-             <div className="grid gap-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input 
-                  id="phone" 
-                  name="tel"
-                  type="tel"
-                  placeholder="e.g., 0912345678" 
-                  required 
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  disabled={isLoading}
-                  autoComplete="tel"
-                />
-              </div>
-               <div className="grid gap-2">
-                <Label htmlFor="school">School</Label>
-                 <Select onValueChange={setSelectedSchool} value={selectedSchool} disabled={isLoading}>
-                    <SelectTrigger id="school" name="school">
-                        <SelectValue placeholder="Select your school" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {schools.map(school => (
-                            <SelectItem key={school.id} value={school.name}>{school.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-              </div>
-            <div className="grid gap-2">
+            <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                name="password"
-                type="password" 
-                required 
+              <Input
+                id="password"
+                type="password"
+                placeholder="Create a password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-                autoComplete="new-password"
+                required
               />
             </div>
-             <div className="grid gap-2">
-              <Label htmlFor="confirm-password">Confirm Password</Label>
-              <Input 
-                id="confirm-password" 
-                name="confirm-password"
-                type="password" 
-                required 
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Confirm your password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                disabled={isLoading}
-                autoComplete="new-password"
+                required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? <Loader2 className="animate-spin" /> : "Create Account"}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Creating account..." : "Create account"}
             </Button>
           </form>
+          <div className="mt-4 text-center text-sm">
+            Already have an account?{" "}
+            <Link href="/login" className="text-primary hover:underline">
+              Sign in
+            </Link>
+          </div>
         </CardContent>
       </Card>
-      <div className="mt-4 text-center text-sm">
-        Already have an account?{" "}
-        <Link href="/login" className="underline text-primary">
-          Login
-        </Link>
-      </div>
-    </>
-  )
+    </div>
+  );
 }

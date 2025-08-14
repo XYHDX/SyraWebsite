@@ -12,9 +12,9 @@ datasource db {
 
 model User {
   id        String   @id @default(cuid())
-  firebaseUid String  @unique
+  email     String   @unique
+  password  String
   name      String?
-  email     String?
   role      String   @default("User")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

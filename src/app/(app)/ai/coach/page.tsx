@@ -15,8 +15,10 @@ import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface UserProfile {
-  role?: string;
+  id: string;
+  email: string;
   name?: string;
+  role: string;
 }
 
 export default function AiCoachPage() {
@@ -25,79 +27,30 @@ export default function AiCoachPage() {
     const router = useRouter();
 
     useEffect(() => {
-        let isMounted = true;
-
-        const init = async () => {
+        const checkAuth = async () => {
             try {
-                const { auth } = await import('@/lib/firebase');
-                const { onAuthStateChanged } = await import('firebase/auth');
-
-                if (!isMounted) return;
+                const response = await fetch('/api/auth/me');
                 
-                const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-                    if (currentUser) {
-                        try {
-                            // Get user token for API call
-                            const token = await currentUser.getIdToken();
-                            
-                            // Fetch user from Prisma via API
-                            const response = await fetch('/api/users/me', {
-                                headers: {
-                                    'Authorization': `Bearer ${currentUser.uid}`,
-                                }
-                            });
-
-                            if (response.ok) {
-                                const profile = await response.json();
-                                setUserProfile(profile);
-                                if (profile.role !== 'Admin' && profile.role !== 'Coach') {
-                                    router.push('/dashboard');
-                                }
-                            } else if (response.status === 404) {
-                                // User doesn't exist in Prisma, create them
-                                const createResponse = await fetch('/api/users', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                    },
-                                    body: JSON.stringify({
-                                        firebaseUid: currentUser.uid,
-                                        name: currentUser.displayName || 'Coach',
-                                        email: currentUser.email,
-                                        role: 'Coach', // Default role for AI coach access
-                                    })
-                                });
-
-                                if (createResponse.ok) {
-                                    const newProfile = await createResponse.json();
-                                    setUserProfile(newProfile);
-                                } else {
-                                    router.push('/dashboard');
-                                }
-                            } else {
-                                router.push('/dashboard');
-                            }
-                        } catch (error) {
-                            console.error('Error fetching user:', error);
-                            router.push('/dashboard');
-                        }
-                    } else {
-                        router.push('/login');
+                if (response.ok) {
+                    const data = await response.json();
+                    const profile = data.user;
+                    setUserProfile(profile);
+                    
+                    if (profile.role !== 'Admin' && profile.role !== 'Coach') {
+                        router.push('/dashboard');
                     }
-                    setLoading(false);
-                });
-
-                return () => {
-                    isMounted = false;
-                    unsubscribe();
-                };
+                } else {
+                    router.push('/login');
+                }
             } catch (error) {
-                console.error('Error initializing auth:', error);
+                console.error('Auth check error:', error);
+                router.push('/login');
+            } finally {
                 setLoading(false);
             }
         };
 
-        void init();
+        checkAuth();
     }, [router]);
     
     const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
