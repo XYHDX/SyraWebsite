@@ -5,8 +5,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
-import { db } from '@/lib/firebase'; // Using client SDK is fine here for reads
+import { db } from '@/lib/db';
 
 export const getUpcomingCompetitions = ai.defineTool(
   {
@@ -23,24 +22,26 @@ export const getUpcomingCompetitions = ai.defineTool(
   },
   async ({ count }) => {
     console.log(`Getting ${count} upcoming competitions...`);
-    const competitionsCol = collection(db, "competitions");
-    const q = query(
-        competitionsCol, 
-        where("status", "==", "Upcoming"), 
-        orderBy("date", "asc"), 
-        limit(count)
-    );
-
-    const competitionSnapshot = await getDocs(q);
-    const competitionsList = competitionSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            name: data.name,
-            date: data.date.toDate().toLocaleDateString(),
-            status: data.status
-        };
-    });
     
-    return competitionsList;
+    // For now, return mock data since we haven't migrated competitions to Prisma yet
+    const mockCompetitions = [
+      {
+        name: "VEX Robotics Competition",
+        date: "2024-03-15",
+        status: "Upcoming"
+      },
+      {
+        name: "FIRST Robotics Competition",
+        date: "2024-04-20",
+        status: "Upcoming"
+      },
+      {
+        name: "Arduino Innovation Challenge",
+        date: "2024-05-10",
+        status: "Upcoming"
+      }
+    ];
+    
+    return mockCompetitions.slice(0, count);
   }
 );

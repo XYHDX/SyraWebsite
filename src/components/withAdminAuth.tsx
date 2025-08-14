@@ -3,53 +3,65 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
-import { Bot } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const withAdminAuth = <P extends object>(Component: React.ComponentType<P>) => {
-  const WrappedComponent = (props: P) => {
-    const router = useRouter();
-    const [loading, setLoading] = useState(true);
-    const [isAdmin, setIsAdmin] = useState(false);
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  role: string;
+}
 
-    useEffect(() => {
-      const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
-        if (user) {
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDocSnap = await getDoc(userDocRef);
-          if (userDocSnap.exists() && userDocSnap.data().role === 'Admin') {
-            setIsAdmin(true);
-          } else {
-            router.push('/dashboard'); // Redirect if not an admin
+interface WithAdminAuthProps {
+  children: React.ReactNode;
+}
+
+export default function WithAdminAuth({ children }: WithAdminAuthProps) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        
+        if (response.ok) {
+          const data = await response.json();
+          const userData = data.user;
+          setUser(userData);
+          
+          if (userData.role !== 'Admin') {
+            router.push('/dashboard');
           }
         } else {
-          router.push('/login'); // Redirect if not logged in
+          router.push('/login');
         }
+      } catch (error) {
+        console.error('Auth check error:', error);
+        router.push('/login');
+      } finally {
         setLoading(false);
-      });
+      }
+    };
 
-      return () => unsubscribe();
-    }, [router]);
+    checkAuth();
+  }, [router]);
 
-    if (loading) {
-      return (
-         <div className="flex h-screen w-full items-center justify-center bg-background">
-            <div className="flex flex-col items-center gap-4">
-                <Bot className="w-16 h-16 animate-pulse text-primary" />
-                <p className="text-muted-foreground">Verifying permissions...</p>
-            </div>
-        </div>
-      );
-    }
+  if (loading) {
+    return (
+      <div className="p-4 space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-4 w-1/2" />
+      </div>
+    );
+  }
 
-    return isAdmin ? <Component {...props} /> : null;
-  };
+  if (!user || user.role !== 'Admin') {
+    return null;
+  }
 
-  WrappedComponent.displayName = `withAdminAuth(${Component.displayName || Component.name || 'Component'})`;
-
-  return WrappedComponent;
-};
-
-export default withAdminAuth;
+  return <>{children}</>;
+}
